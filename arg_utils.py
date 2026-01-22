@@ -75,13 +75,6 @@ def add_generation_args(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--l1_penalty", type=float, default=0.25, help="L1 penalty for Splice"
     )
-    parser.add_argument(
-        "--apply_sparsity",
-        type=str,
-        default="true",
-        choices=["true", "false"],
-        help="Apply sparsity of the Splice model",
-    )
     return parser
 
 

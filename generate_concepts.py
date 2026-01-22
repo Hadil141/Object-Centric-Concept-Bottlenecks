@@ -486,21 +486,15 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Model {args.model} not implemented yet.")
 
-    apply_sparsity = args.apply_sparsity == "true"
     splicemodel = splice.load(
         model_name,
         args.vocabulary,
         args.size,
         l1_penalty=args.l1_penalty,
-        apply_sparsity=apply_sparsity,
         device=args.device,
         return_weights=True,
     )
     preprocessor = splice.get_preprocess(model_name)
-
-    if not apply_sparsity:
-        # only for the file paths, the argument itself does not matter for the SpLiCE model when apply_sparsity is False
-        args.l1_penalty = 0.0
 
     if args.use_object_concepts:
         if args.object_detection_model == "sam":
