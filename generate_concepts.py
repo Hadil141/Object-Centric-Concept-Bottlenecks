@@ -16,6 +16,7 @@ from data import (
     PascalVOCDataset,
     CIFAR100Dataset,
     COCOLogicDataset,
+    load_category_mapping,
 )
 from torchvision.models.detection import maskrcnn_resnet50_fpn
 from segment_anything import sam_model_registry
@@ -56,12 +57,28 @@ def generate_concepts(
         train_dataset = CocoDataset(data_dir, transform=preprocessor, train_val="train")
         test_dataset = CocoDataset(data_dir, transform=preprocessor, train_val="val")
     elif dataset == "cocologic":
+        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
+        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
+        train_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
+            image_dir=os.path.join(data_dir, "images/train2017"),
+            category_id_to_name=train_cat_map,
+            transform=preprocessor,
+        )
+        test_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
+            image_dir=os.path.join(data_dir, "images/val2017"),
+            category_id_to_name=test_cat_map,
+            transform=preprocessor,
+        )
+        '''
         train_dataset = COCOLogicDataset(
             data_dir, transform=preprocessor, train_val="train"
         )
         test_dataset = COCOLogicDataset(
             data_dir, transform=preprocessor, train_val="val"
         )
+        '''
     elif dataset == "sun":
         full_dataset = SUNDataset(root=data_dir, transform=preprocessor, download=True)
         train_dataset, test_dataset = persistent_indices(
@@ -255,8 +272,24 @@ def generate_obj_encodings(
         train_dataset = CocoDataset(data_dir, transform=None, train_val="train")
         test_dataset = CocoDataset(data_dir, transform=None, train_val="val")
     elif dataset == "cocologic":
+        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
+        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
+        train_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
+            image_dir=os.path.join(data_dir, "images/train2017"),
+            category_id_to_name=train_cat_map,
+            transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
+        )
+        test_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
+            image_dir=os.path.join(data_dir, "images/val2017"),
+            category_id_to_name=test_cat_map,
+            transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
+        )
+        '''
         train_dataset = COCOLogicDataset(data_dir, transform=None, train_val="train")
         test_dataset = COCOLogicDataset(data_dir, transform=None, train_val="val")
+        '''
     elif dataset == "sun":
         full_dataset = SUNDataset(root=data_dir, transform=None, download=True)
         train_dataset, test_dataset = persistent_indices(
