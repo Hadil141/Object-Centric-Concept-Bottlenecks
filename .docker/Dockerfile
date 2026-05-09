@@ -19,10 +19,11 @@ COPY requirements.txt .
 
 RUN \
   python -m pip install --upgrade pip && \
-  pip install "torch==2.3.0" -r requirements.txt  
+  pip install setuptools && \
+  pip install "torch==2.3.0" -r requirements.txt
 
 RUN pip install git+https://github.com/facebookresearch/segment-anything.git
 
 ENV PYTHONPATH=$PYTHONPATH:src
 
-CMD pip install /workspaces/$PROJECT_NAME && zsh
+CMD pip install --no-build-isolation -e /workspaces/$PROJECT_NAME && zsh

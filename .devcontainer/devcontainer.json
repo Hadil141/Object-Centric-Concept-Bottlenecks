@@ -1,0 +1,29 @@
+{
+  "name": "sacbm",
+  "dockerComposeFile": ["../.docker/compose.yml", "../.docker/compose.cuda.yml"],
+  "service": "sacbm",
+  "workspaceFolder": "/workspaces/${localEnv:COMPOSE_PROJ_NAME}",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.pylance",
+        "ms-toolsai.jupyter"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  },
+
+  "remoteEnv": {
+    "COMPOSE_PROJ_NAME": "${localEnv:COMPOSE_PROJ_NAME}",
+    "PYTHONPATH": "${containerEnv:PYTHONPATH}:src"
+  },
+
+  "postCreateCommand": "pip install --no-build-isolation -e /workspaces/${localEnv:COMPOSE_PROJ_NAME}",
+
+  "remoteUser": "root"
+}
