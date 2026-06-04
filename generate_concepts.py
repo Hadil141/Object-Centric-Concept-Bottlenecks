@@ -265,6 +265,7 @@ def generate_obj_encodings(
     initials,
     seed,
     draw_bbox,
+    draw_circle,
 ):
     # generate object_centric encodings
 
@@ -407,6 +408,7 @@ def generate_obj_encodings(
                         embedding_dim,
                         preprocessor,
                         draw_bbox,
+                        draw_circle,
                     )
 
                     # embeddings.append(obj_embeddings)
@@ -474,6 +476,8 @@ def generate_obj_encodings(
                         splice_model,
                         embedding_dim,
                         preprocessor,
+                        draw_bbox,
+                        draw_circle,
                     )
 
                     # embeddings.append(obj_embeddings)
@@ -562,7 +566,7 @@ if __name__ == "__main__":
             ]
         )
 
-        obj_selection_mode = "draw" if args.draw_bbox else "crop"
+        obj_selection_mode = "circle" if args.draw_circle else "draw" if args.draw_bbox else "crop"
         file_path = os.path.join(
             args.encoding_dir,
             args.dataset,
@@ -592,6 +596,7 @@ if __name__ == "__main__":
             initials=args.initials,
             seed=args.seed,
             draw_bbox=args.draw_bbox,
+            draw_circle=args.draw_circle,
         )
     else:
         file_path = os.path.join(
