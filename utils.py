@@ -45,6 +45,19 @@ def draw_box_on_image(image_tensor, box, color=(255, 0, 0), width=2):
     draw.rectangle([x1, y1, x2, y2], outline=color, width=width)
     return image_pil
 
+def draw_circle_on_image(image_tensor, box, color=(255, 0, 0), width=6):
+    """
+    Draw a red ellipse inscribed in the bounding box on a copy of the image_tensor.
+    image_tensor: Tensor of shape (3, H, W)
+    box: Tensor of shape (4,) with coordinates (x1, y1, x2, y2)
+    Returns a PIL image with the ellipse drawn.
+    """
+    image_pil = TF.to_pil_image(image_tensor.cpu())
+    draw = ImageDraw.Draw(image_pil)
+    x1, y1, x2, y2 = box.long()
+    draw.ellipse([x1, y1, x2, y2], outline=color, width=width)
+    return image_pil
+
 
 def gather_object_embeddings(
     boxes,
@@ -57,8 +70,12 @@ def gather_object_embeddings(
     embedding_dim,
     transform,
     draw_boxes=False,
+    draw_circles=False,
 ):
     """
+    Für jede gefilterte Box: entweder zuschneiden (crop) oder einzeichnen (draw box or circle auf Originalbild), 
+    dann durch SpLiCE encodieren.
+
     Instead of cropping to boxes, this function draws bounding boxes on the image and encodes it.
     Returns: (obj_embeddings: Tensor[num_objects, embedding_dim], num_boxes_used: int)
     """
@@ -70,7 +87,11 @@ def gather_object_embeddings(
 
     processed_images = []
     for box in boxes:
-        if draw_boxes:
+        if draw_circles:
+            # Draw circle on full image
+            circled_pil = draw_circle_on_image(image, box)
+            processed_image = TF.to_tensor(circled_pil)  # (3, H, W)
+        elif draw_boxes:
             # Draw bounding box on full image
             # In principle, the processor in this case does not need to resize the image, but we do it to ensure consistency
             boxed_pil = draw_box_on_image(image, box)

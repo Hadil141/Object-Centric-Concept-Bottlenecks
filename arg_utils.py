@@ -123,6 +123,12 @@ def add_object_centric_args(parser: argparse.ArgumentParser):
         help="If the object proposals should be drawn on the image for CLIP processing (by default the object is cropped)",
     )
     parser.add_argument(
+        "--draw_circle",
+        default=False,
+        action="store_true",
+        help="If the object proposals should be marked with a red circle on the full image for CLIP processing (by default the object is cropped)",
+    )
+    parser.add_argument(
         "--only_objects",
         default=False,
         action="store_true",
