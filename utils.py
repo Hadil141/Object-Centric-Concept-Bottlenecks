@@ -71,6 +71,8 @@ def gather_object_embeddings(
     transform,
     draw_boxes=False,
     draw_circles=False,
+    adaptive=False,
+    adaptive_threshold=0.20,
 ):
     """
     Für jede gefilterte Box: entweder zuschneiden (crop) oder einzeichnen (draw box or circle auf Originalbild), 
@@ -86,8 +88,21 @@ def gather_object_embeddings(
         boxes = boxes[:num_objects]
 
     processed_images = []
+    image_area = image.shape[1] * image.shape[2]
+
     for box in boxes:
-        if draw_circles:
+        if adaptive:
+            x1, y1, x2, y2 = box.long()
+            box_area = ((x2 - x1) * (y2 - y1)).item()
+            relative_area = box_area / image_area
+            if relative_area >= adaptive_threshold:
+                # Large object -> Circle preserves global context
+                circled_pil = draw_circle_on_image(image, box)
+                processed_image = TF.to_tensor(circled_pil)
+            else:
+                # Small object -> Crop provides more detail 
+                processed_image = image[:, y1:y2, x1:x2].cpu()
+        elif draw_circles:
             # Draw circle on full image
             circled_pil = draw_circle_on_image(image, box)
             processed_image = TF.to_tensor(circled_pil)  # (3, H, W)

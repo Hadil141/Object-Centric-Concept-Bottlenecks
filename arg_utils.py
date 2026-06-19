@@ -129,6 +129,18 @@ def add_object_centric_args(parser: argparse.ArgumentParser):
         help="If the object proposals should be marked with a red circle on the full image for CLIP processing (by default the object is cropped)",
     )
     parser.add_argument(
+    "--adaptive_marking",
+    default=False,
+    action="store_true",
+    help="Use adaptive marking: Circle for large objects, Crop for small objects",
+    )
+    parser.add_argument(
+        "--adaptive_threshold",
+        type=float,
+        default=0.20,
+        help="Relative object size threshold for adaptive marking (default: 0.20)",
+    )
+    parser.add_argument(
         "--only_objects",
         default=False,
         action="store_true",
