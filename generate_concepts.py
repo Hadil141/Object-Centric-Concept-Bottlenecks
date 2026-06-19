@@ -57,6 +57,8 @@ def generate_concepts(
         train_dataset = CocoDataset(data_dir, transform=preprocessor, train_val="train")
         test_dataset = CocoDataset(data_dir, transform=preprocessor, train_val="val")
     elif dataset == "cocologic":
+        # Weil in COCO-Dateien Objekte nur als Nummern gespeichert sind (id: 18), aber die logischen Regeln mit Namen arbeiten 
+        # erstellt das Wörterbuch: 18 → "dog"
         train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
         test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
         train_dataset = COCOLogicDataset(
@@ -266,7 +268,9 @@ def generate_obj_encodings(
     seed,
     draw_bbox,
     draw_circle,
-):
+    adaptive_marking,
+    adaptive_threshold,
+    ):
     # generate object_centric encodings
 
     if dataset == "coco":
@@ -409,6 +413,8 @@ def generate_obj_encodings(
                         preprocessor,
                         draw_bbox,
                         draw_circle,
+                        adaptive=adaptive_marking,
+                        adaptive_threshold=adaptive_threshold,
                     )
 
                     # embeddings.append(obj_embeddings)
@@ -478,6 +484,8 @@ def generate_obj_encodings(
                         preprocessor,
                         draw_bbox,
                         draw_circle,
+                        adaptive=adaptive_marking,
+                        adaptive_threshold=adaptive_threshold,
                     )
 
                     # embeddings.append(obj_embeddings)
@@ -566,7 +574,12 @@ if __name__ == "__main__":
             ]
         )
 
-        obj_selection_mode = "circle" if args.draw_circle else "draw" if args.draw_bbox else "crop"
+        obj_selection_mode = (
+            f"adaptive_{args.adaptive_threshold}" if args.adaptive_marking
+            else "circle" if args.draw_circle
+            else "draw" if args.draw_bbox
+            else "crop"
+        )
         file_path = os.path.join(
             args.encoding_dir,
             args.dataset,
@@ -597,6 +610,8 @@ if __name__ == "__main__":
             seed=args.seed,
             draw_bbox=args.draw_bbox,
             draw_circle=args.draw_circle,
+            adaptive_marking=args.adaptive_marking,
+            adaptive_threshold=args.adaptive_threshold,
         )
     else:
         file_path = os.path.join(

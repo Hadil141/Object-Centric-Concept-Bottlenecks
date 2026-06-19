@@ -483,7 +483,13 @@ if __name__ == "__main__":
     ), f"SpLiCE embeddings file {base_embeddings_path} does not exist. Please generate the SpLiCE embeddings first."
     if args.use_object_concepts:
         # check if the concept encodings exist
-        obj_selection_mode = "circle" if args.draw_circle else "draw" if args.draw_bbox else "crop"
+        obj_selection_mode = (
+            f"adaptive_{args.adaptive_threshold}" if args.adaptive_marking
+            else "circle" if args.draw_circle
+            else "draw" if args.draw_bbox
+            else "crop"
+        )
+
         file_path = os.path.join(
             args.encoding_dir,
             args.dataset,
