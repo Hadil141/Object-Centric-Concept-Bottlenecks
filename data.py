@@ -1,4 +1,3 @@
-from torch.utils.data import Dataset, random_split
 import numpy as np
 import os
 import json
@@ -7,6 +6,7 @@ from PIL import Image
 import torchvision.transforms as T
 from torchvision.datasets import SUN397, VOCDetection, CIFAR100
 from collections import defaultdict, Counter
+from torch.utils.data import Dataset, DataLoader, random_split
 
 
 class CocoDataset(Dataset):
@@ -214,6 +214,200 @@ def split_dataset(dataset, train_ratio=0.8):
 
 
 class COCOLogicDataset(Dataset):
+    def __init__(self, json_path, base_path, transform=None, detector_counts_path=None, ocb_concepts_path=None):
+        """
+        Args:
+            json_path (str): Path to the COCOLogic dataset JSON file.
+            base_path (str): Root directory containing image files.
+            transform: Optional torchvision transform for the images.
+        """
+        with open(json_path, "r") as f:
+            data = json.load(f)
+
+        self.images = data["images"]
+        self.categories_meta = data["categories"]
+        self.base_path = base_path
+        self.transform = transform
+        if detector_counts_path is not None:
+            self.detector_counts = torch.load(detector_counts_path)
+        else:
+            self.detector_counts = None
+
+        if ocb_concepts_path is not None:
+            ocb_data = torch.load(ocb_concepts_path)
+            self.ocb_object_concepts = ocb_data["object_concepts"]
+            self.ocb_num_objects = ocb_data["num_objects"]
+            self.ocb_image_concepts = ocb_data["image_concepts"]
+        else:
+            self.ocb_object_concepts = None
+
+        # pre-store keys to have deterministic ordering
+        self.image_ids = list(self.images.keys())
+
+        # --- Determine the max number of variants across all rules/images ---
+        self.max_num_variants = 4
+
+    def __len__(self):
+        return len(self.image_ids)
+
+    def __getitem__(self, idx):
+        image_id = self.image_ids[idx]
+        img_info = self.images[image_id]
+
+        # --- Load image ---
+        img_path = os.path.join(self.base_path, img_info["file_name"])
+        image = Image.open(img_path).convert("RGB")
+
+        if self.transform:
+            image = self.transform(image)
+        else:
+            # default: convert to tensor
+            image = torch.tensor(np.array(image)).permute(2, 0, 1).float() / 255.0
+
+        # --- Prepare tensors ---
+        rule_labels = torch.tensor(img_info["labels"], dtype=torch.float32)
+        boundary_types = torch.tensor(img_info["boundary_type"], dtype=torch.int64)
+        categories = torch.tensor(img_info["categories"], dtype=torch.int64)
+
+        # --- Variants as binary activation matrix ---
+        num_rules = len(img_info["rule_variants"])
+        variants_tensor = torch.zeros(
+            (num_rules, self.max_num_variants), dtype=torch.float32
+        )
+
+        for i, rule_variants in enumerate(img_info["rule_variants"]):
+            for variant_id in rule_variants:
+                if variant_id < self.max_num_variants:
+                    variants_tensor[i, variant_id] = 1.0
+
+        item = {
+            "image": image,
+            "image_id": int(image_id),
+            "categories": categories,
+            "rule_labels": rule_labels,
+            "boundary_types": boundary_types,
+            "variants": variants_tensor,
+        }
+
+        if self.detector_counts is not None:
+            item["detector_categories"] = self.detector_counts[idx]
+
+        if self.ocb_object_concepts is not None:
+            item["ocb_object_concepts"] = self.ocb_object_concepts[idx]
+            item["ocb_num_objects"] = self.ocb_num_objects[idx]
+            item["ocb_image_concepts"] = self.ocb_image_concepts[idx]
+
+        return item
+
+
+def get_cocologic_dataloaders(json_path, base_path, detector_counts_path=None, ocb_concepts_path=None, batch_size=32, transform=None, seed=42, num_workers=4, val_split=0.1):
+    """
+    Creates train, val, and test dataloaders for COCOLogic.
+    The dataset JSON should contain a single split (train/test or combined).
+    This function creates a 90/10 train/val split for training data.
+    """
+    full_dataset = COCOLogicDataset(json_path, base_path, transform=transform, detector_counts_path=detector_counts_path, ocb_concepts_path=ocb_concepts_path)
+
+    # --- Determine split sizes ---
+    total_len = len(full_dataset)
+    val_len = int(val_split * total_len)
+    train_len = total_len - val_len
+
+    # --- Deterministic split ---
+    generator = torch.Generator().manual_seed(seed)
+    train_dataset, val_dataset = random_split(full_dataset, [train_len, val_len], generator=generator)
+
+    # --- Create dataloaders ---
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=num_workers)
+    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    return train_loader, val_loader
+
+
+class PerRuleDatasetWrapper(Dataset):
+    """Wraps a COCOLogicDataset, exposing only samples and the label dimension for one rule."""
+
+    def __init__(self, base_dataset, indices, rule_idx):
+        self.base = base_dataset
+        self.indices = indices
+        self.rule_idx = rule_idx
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, i):
+        item = self.base[self.indices[i]]
+        item["rule_labels"] = item["rule_labels"][self.rule_idx : self.rule_idx + 1]
+        item["boundary_types"] = item["boundary_types"][self.rule_idx : self.rule_idx + 1]
+        item["variants"] = item["variants"][self.rule_idx : self.rule_idx + 1, :]
+        return item
+
+    @property
+    def image_ids(self):
+        return [self.base.image_ids[i] for i in self.indices]
+
+
+def get_per_rule_data(
+    train_json, test_json, base_path, rule_idx,
+    batch_size, transform, num_workers,
+    train_detector_counts_path=None, test_detector_counts_path=None,
+    ocb_train_path=None, ocb_test_path=None,
+):
+    """
+    Returns the per-rule train dataset, the test DataLoader, and the per-sample
+    train labels for a single rule.
+
+    The train dataset is returned (rather than a DataLoader) so the caller can build
+    leave-one-out cross-validation folds via torch.utils.data.Subset. train_labels is
+    the list of 0/1 rule labels aligned with the train dataset's sample order, used to
+    construct folds and recompute per-fold positive class weights.
+    """
+    rule_key = f"rule_{rule_idx + 1}"
+
+    def collect_image_ids(json_path):
+        with open(json_path) as f:
+            data = json.load(f)
+        rule = data["rules"][rule_key]
+        ids = set()
+        for variant_ids in rule["variants"]:
+            ids.update(str(x) for x in variant_ids)
+        ids.update(str(x) for x in rule["far_from_boundary"])
+        for hn_ids in rule["near_boundary"]:
+            ids.update(str(x) for x in hn_ids)
+        return ids
+
+    train_rule_ids = collect_image_ids(train_json)
+    test_rule_ids = collect_image_ids(test_json)
+
+    train_full = COCOLogicDataset(
+        train_json, base_path, transform=transform,
+        detector_counts_path=train_detector_counts_path,
+        ocb_concepts_path=ocb_train_path,
+    )
+    test_full = COCOLogicDataset(
+        test_json, base_path, transform=transform,
+        detector_counts_path=test_detector_counts_path,
+        ocb_concepts_path=ocb_test_path,
+    )
+
+    train_indices = [i for i, img_id in enumerate(train_full.image_ids) if img_id in train_rule_ids]
+    test_indices = [i for i, img_id in enumerate(test_full.image_ids) if img_id in test_rule_ids]
+
+    train_dataset = PerRuleDatasetWrapper(train_full, train_indices, rule_idx)
+    test_dataset = PerRuleDatasetWrapper(test_full, test_indices, rule_idx)
+
+    train_labels = [
+        int(train_full.images[train_full.image_ids[i]]["labels"][rule_idx])
+        for i in train_indices
+    ]
+
+    test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+
+    return train_dataset, test_loader, train_labels
+
+
+'''
+class COCOLogicDataset(Dataset):
     def __init__(
         self,
         annotation_file,
@@ -402,3 +596,4 @@ class COCOLogicDataset(Dataset):
         label_index = torch.tensor(labels.index(1), dtype=torch.long)
         # return labels as one.hot and twice for consistency
         return image, torch.tensor(labels), torch.tensor(labels), img_id
+'''

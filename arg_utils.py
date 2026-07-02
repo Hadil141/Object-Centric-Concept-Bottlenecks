@@ -43,6 +43,12 @@ def add_dataset_args(parser: argparse.ArgumentParser):
         help="Path to the directory containing the images",
     )
     parser.add_argument(
+    "--json_dir",
+    type=str,
+    default=None,
+    help="Directory containing COCOLogic V2 JSON files (defaults to data_dir)",
+    )
+    parser.add_argument(
         "--encoding_dir",
         type=str,
         default="encodings",
