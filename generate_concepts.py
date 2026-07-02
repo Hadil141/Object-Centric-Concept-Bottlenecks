@@ -48,6 +48,7 @@ def generate_concepts(
     initials,
     seed,
     clip_embedding_dim,
+    json_dir=None,
 ):
 
     os.makedirs(encoding_dir, exist_ok=True)
@@ -57,30 +58,17 @@ def generate_concepts(
         train_dataset = CocoDataset(data_dir, transform=preprocessor, train_val="train")
         test_dataset = CocoDataset(data_dir, transform=preprocessor, train_val="val")
     elif dataset == "cocologic":
-        # Weil in COCO-Dateien Objekte nur als Nummern gespeichert sind (id: 18), aber die logischen Regeln mit Namen arbeiten 
-        # erstellt das Wörterbuch: 18 → "dog"
-        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
-        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
+        _json_dir = json_dir if json_dir is not None else data_dir
         train_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
-            image_dir=os.path.join(data_dir, "images/train2017"),
-            category_id_to_name=train_cat_map,
+            json_path=os.path.join(_json_dir, "cocologic_train.json"),
+            base_path=os.path.join(data_dir, "images"),
             transform=preprocessor,
         )
         test_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
-            image_dir=os.path.join(data_dir, "images/val2017"),
-            category_id_to_name=test_cat_map,
+            json_path=os.path.join(_json_dir, "cocologic_test.json"),
+            base_path=os.path.join(data_dir, "images"),
             transform=preprocessor,
         )
-        '''
-        train_dataset = COCOLogicDataset(
-            data_dir, transform=preprocessor, train_val="train"
-        )
-        test_dataset = COCOLogicDataset(
-            data_dir, transform=preprocessor, train_val="val"
-        )
-        '''
     elif dataset == "sun":
         full_dataset = SUNDataset(root=data_dir, transform=preprocessor, download=True)
         train_dataset, test_dataset = persistent_indices(
@@ -207,10 +195,15 @@ def generate_concepts(
         print(f"Computing train set embeddings...")
         start_idx = 0
         with torch.no_grad():
-            for i, (images, super_categories, categories, img_ids) in enumerate(
-                tqdm(train_loader)
-            ):
+            for i, batch in enumerate(tqdm(train_loader)):
                 rtpt.step()
+                if dataset == "cocologic":    
+                    images = batch["image"]
+                    super_categories = batch["rule_labels"]
+                    categories = batch["rule_labels"]
+                    img_ids = batch["image_id"]
+                else:                          
+                    images, super_categories, categories, img_ids = batch
                 images = images.to(device)
                 embeddings, clip_encs = model.encode_image(images)
 
@@ -229,10 +222,15 @@ def generate_concepts(
         print(f"Computing test set embeddings...")
         start_idx = 0
         with torch.no_grad():
-            for i, (images, super_categories, categories, img_ids) in enumerate(
-                tqdm(test_loader)
-            ):
+            for i, batch in enumerate(tqdm(test_loader)):
                 rtpt.step()
+                if dataset == "cocologic":
+                    images = batch["image"]
+                    super_categories = batch["rule_labels"]
+                    categories = batch["rule_labels"]
+                    img_ids = batch["image_id"]
+                else:
+                    images, super_categories, categories, img_ids = batch
                 images = images.to(device)
                 embeddings, clip_encs = model.encode_image(images)
 
@@ -270,6 +268,7 @@ def generate_obj_encodings(
     draw_circle,
     adaptive_marking,
     adaptive_threshold,
+    json_dir=None,
     ):
     # generate object_centric encodings
 
@@ -277,24 +276,17 @@ def generate_obj_encodings(
         train_dataset = CocoDataset(data_dir, transform=None, train_val="train")
         test_dataset = CocoDataset(data_dir, transform=None, train_val="val")
     elif dataset == "cocologic":
-        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
-        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
+        _json_dir = json_dir if json_dir is not None else data_dir
         train_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
-            image_dir=os.path.join(data_dir, "images/train2017"),
-            category_id_to_name=train_cat_map,
+            json_path=os.path.join(_json_dir, "cocologic_train.json"),
+            base_path=os.path.join(data_dir, "images"),
             transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
         )
         test_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
-            image_dir=os.path.join(data_dir, "images/val2017"),
-            category_id_to_name=test_cat_map,
+            json_path=os.path.join(_json_dir, "cocologic_test.json"),
+            base_path=os.path.join(data_dir, "images"),
             transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
         )
-        '''
-        train_dataset = COCOLogicDataset(data_dir, transform=None, train_val="train")
-        test_dataset = COCOLogicDataset(data_dir, transform=None, train_val="val")
-        '''
     elif dataset == "sun":
         full_dataset = SUNDataset(root=data_dir, transform=None, download=True)
         train_dataset, test_dataset = persistent_indices(
@@ -382,10 +374,13 @@ def generate_obj_encodings(
         total_objects_step_1 = 0
         start_idx = 0
         with torch.no_grad():
-            for i, (images, super_categories, categories, img_ids) in enumerate(
-                tqdm(train_loader)
-            ):
+            for i, batch in enumerate(tqdm(train_loader)):
                 rtpt.step()
+                if dataset == "cocologic":
+                    images = batch["image"]
+                    img_ids = batch["image_id"]
+                else:
+                    images, _, _, img_ids = batch
                 images = images.to(device)
 
                 embeddings = []
@@ -454,10 +449,13 @@ def generate_obj_encodings(
         total_detected_objects = 0
         start_idx = 0
         with torch.no_grad():
-            for i, (images, super_categories, categories, img_ids) in enumerate(
-                tqdm(test_loader)
-            ):
+            for i, batch in enumerate(tqdm(test_loader)):
                 rtpt.step()
+                if dataset == "cocologic":
+                    images = batch["image"]
+                    img_ids = batch["image_id"]
+                else:
+                    images, _, _, img_ids = batch
                 images = images.to(device)
 
                 embeddings = []
@@ -612,6 +610,7 @@ if __name__ == "__main__":
             draw_circle=args.draw_circle,
             adaptive_marking=args.adaptive_marking,
             adaptive_threshold=args.adaptive_threshold,
+            json_dir=args.json_dir, 
         )
     else:
         file_path = os.path.join(
@@ -635,4 +634,51 @@ if __name__ == "__main__":
             initials=args.initials,
             seed=args.seed,
             clip_embedding_dim=embedding_dim,
+            json_dir=args.json_dir, 
         )
+
+
+    '''
+    elif dataset == "cocologic":
+        # Weil in COCO-Dateien Objekte nur als Nummern gespeichert sind (id: 18), aber die logischen Regeln mit Namen arbeiten 
+        # erstellt das Wörterbuch: 18 → "dog"
+        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
+        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
+        train_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
+            image_dir=os.path.join(data_dir, "images/train2017"),
+            category_id_to_name=train_cat_map,
+            transform=preprocessor,
+        )
+        test_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
+            image_dir=os.path.join(data_dir, "images/val2017"),
+            category_id_to_name=test_cat_map,
+            transform=preprocessor,
+        )
+
+        train_dataset = COCOLogicDataset(
+            data_dir, transform=preprocessor, train_val="train"
+        )
+        test_dataset = COCOLogicDataset(
+            data_dir, transform=preprocessor, train_val="val"
+        )
+    
+    elif dataset == "cocologic":
+        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
+        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
+        train_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
+            image_dir=os.path.join(data_dir, "images/train2017"),
+            category_id_to_name=train_cat_map,
+            transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
+        )
+        test_dataset = COCOLogicDataset(
+            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
+            image_dir=os.path.join(data_dir, "images/val2017"),
+            category_id_to_name=test_cat_map,
+            transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
+        )
+        train_dataset = COCOLogicDataset(data_dir, transform=None, train_val="train")
+        test_dataset = COCOLogicDataset(data_dir, transform=None, train_val="val")s
+    '''
