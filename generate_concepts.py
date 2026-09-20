@@ -336,6 +336,9 @@ def generate_obj_encodings(
         train_group = f.create_group("train_obj_embeddings")
         test_group = f.create_group("test_obj_embeddings")
 
+        train_boxes_group = f.create_group("train_obj_boxes")
+        test_boxes_group = f.create_group("test_obj_boxes")        
+
         # Create a dataset to keep track of the number of detected objects
         f.create_dataset(
             "train_num_obj",
@@ -396,7 +399,7 @@ def generate_obj_encodings(
                 )
 
                 for j in range(len(images)):
-                    obj_embeddings, num_objs = gather_object_embeddings(
+                    obj_embeddings, obj_boxes, num_objs = gather_object_embeddings(
                         boxes[j],
                         scores[j],
                         min_score,
@@ -419,6 +422,10 @@ def generate_obj_encodings(
                         f"obj_embeddings_{start_idx + j}",
                         data=obj_embeddings.cpu().numpy(),
                     )
+                    train_boxes_group.create_dataset(
+                        f"obj_boxes_{start_idx + j}",
+                        data=obj_boxes.cpu().numpy(),
+                    )                    
 
                 # embeddings = torch.stack(embeddings)
                 object_counts = torch.tensor(object_counts).unsqueeze(1)
@@ -470,7 +477,7 @@ def generate_obj_encodings(
                     max_iou_threshold,
                 )
                 for j in range(len(images)):
-                    obj_embeddings, num_objs = gather_object_embeddings(
+                    obj_embeddings, obj_boxes, num_objs = gather_object_embeddings(
                         boxes[j],
                         scores[j],
                         min_score,
@@ -492,6 +499,10 @@ def generate_obj_encodings(
                         f"obj_embeddings_{start_idx + j}",
                         data=obj_embeddings.cpu().numpy(),
                     )
+                    test_boxes_group.create_dataset(
+                        f"obj_boxes_{start_idx + j}",                         
+                        data=obj_boxes.cpu().numpy(),
+                    )                    
                 # embeddings = torch.stack(embeddings)
                 object_counts = torch.tensor(object_counts).unsqueeze(1)
 
@@ -637,48 +648,3 @@ if __name__ == "__main__":
             json_dir=args.json_dir, 
         )
 
-
-    '''
-    elif dataset == "cocologic":
-        # Weil in COCO-Dateien Objekte nur als Nummern gespeichert sind (id: 18), aber die logischen Regeln mit Namen arbeiten 
-        # erstellt das Wörterbuch: 18 → "dog"
-        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
-        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
-        train_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
-            image_dir=os.path.join(data_dir, "images/train2017"),
-            category_id_to_name=train_cat_map,
-            transform=preprocessor,
-        )
-        test_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
-            image_dir=os.path.join(data_dir, "images/val2017"),
-            category_id_to_name=test_cat_map,
-            transform=preprocessor,
-        )
-
-        train_dataset = COCOLogicDataset(
-            data_dir, transform=preprocessor, train_val="train"
-        )
-        test_dataset = COCOLogicDataset(
-            data_dir, transform=preprocessor, train_val="val"
-        )
-    
-    elif dataset == "cocologic":
-        train_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_train2017.json"))
-        test_cat_map = load_category_mapping(os.path.join(data_dir, "annotations/instances_val2017.json"))
-        train_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_train2017.json"),
-            image_dir=os.path.join(data_dir, "images/train2017"),
-            category_id_to_name=train_cat_map,
-            transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
-        )
-        test_dataset = COCOLogicDataset(
-            annotation_file=os.path.join(data_dir, "annotations/instances_val2017.json"),
-            image_dir=os.path.join(data_dir, "images/val2017"),
-            category_id_to_name=test_cat_map,
-            transform=T.Compose([T.Resize((224, 224)), T.ToTensor()]),
-        )
-        train_dataset = COCOLogicDataset(data_dir, transform=None, train_val="train")
-        test_dataset = COCOLogicDataset(data_dir, transform=None, train_val="val")s
-    '''

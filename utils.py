@@ -75,11 +75,8 @@ def gather_object_embeddings(
     adaptive_threshold=0.20,
 ):
     """
-    Für jede gefilterte Box: entweder zuschneiden (crop) oder einzeichnen (draw box or circle auf Originalbild), 
-    dann durch SpLiCE encodieren.
-
-    Instead of cropping to boxes, this function draws bounding boxes on the image and encodes it.
-    Returns: (obj_embeddings: Tensor[num_objects, embedding_dim], num_boxes_used: int)
+    For each filtered box: crop, or draw (box/circle) on the image, then encode with SpLiCE.
+    Returns: (obj_embeddings: Tensor[num_used, embedding_dim], boxes: Tensor[num_used, 4], num_used: int)
     """
     if len(boxes) > 0:
         boxes = boxes[scores > min_score]
@@ -123,8 +120,9 @@ def gather_object_embeddings(
         obj_embeddings, _ = splice_model.encode_image(boxed_images)
     else:
         obj_embeddings = torch.zeros(1, embedding_dim, device=device)
+        boxes = boxes.new_zeros((0, 4))  # leeres Array statt Platzhalter-Box
 
-    return obj_embeddings, len(boxes)
+    return obj_embeddings, boxes, len(boxes)
 
 
 def generate_object_propsals(
