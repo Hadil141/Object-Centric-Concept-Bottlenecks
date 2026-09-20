@@ -215,6 +215,9 @@ def train_model(
     wandb_run=None,
     task_type="multilabel",
     no_concepts=False,
+    checkpoint_path=None,
+    checkpoint_meta=None,
+    pos_weight=None
 ):
 
     model.to(device)
@@ -236,7 +239,9 @@ def train_model(
         else:
             criterion = nn.CrossEntropyLoss()
     else:
-        criterion = nn.BCEWithLogitsLoss()
+        criterion = nn.BCEWithLogitsLoss(
+            pos_weight=pos_weight.to(device) if pos_weight is not None else None
+        )
 
     # Optimizer
     optimizer_main = optim.Adam(model.parameters(), lr=lr)
@@ -448,6 +453,12 @@ def train_model(
 
     wandb_run.log({"test_accuracy": test_accuracy.item()})
 
+    # Save trained task-layer weights to reuse frozen model later 
+    if checkpoint_path is not None:
+        checkpoint = {"state_dict": model.state_dict(), **(checkpoint_meta or {})}
+        torch.save(checkpoint, checkpoint_path)
+        print(f"Checkpoint saved to {checkpoint_path}")
+
     wandb.finish()
 
     return model
@@ -519,6 +530,13 @@ if __name__ == "__main__":
                 debug=args.dataset == "cocologic",
             )
         )
+    if args.dataset == "cocologic":
+        # train_labels ein (20000, 10)-Tensor mit 0en und 1en 
+        train_labels = train_dataset.tensors[-1]
+        # pro Regel ein Verhältnis-Wert
+        pos_weight = (train_labels.shape[0] - train_labels.sum(dim=0)) / train_labels.sum(dim=0)
+    else:
+        pos_weight = None
 
     # reproducible data loading
     def seed_worker(worker_id):
@@ -575,6 +593,17 @@ if __name__ == "__main__":
         else CLASS_NUMBERS[args.dataset][1]
     )
 
+    # Build a checkpoint path 
+    checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+    checkpoint_name = f"{args.aggregation}_{args.prediction_level}_{args.task_type}_seed{args.seed}"
+    checkpoint_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.pt")
+    checkpoint_meta = {
+        "num_classes": num_classes,     # Output-Dimension of nn.Linear (=10 for COCOLogic)
+        "encoding_dim": encoding_dim,   # Input-Dimension of nn.Linear (Concept-Vektor, z.B. 10.000)
+        "no_concepts": args.no_concepts,
+    }
+
     if args.no_concepts:
         model = MLPPredictor(
             num_classes=num_classes,
@@ -604,4 +633,7 @@ if __name__ == "__main__":
         wandb_run=run,
         task_type=args.task_type,
         no_concepts=args.no_concepts,
+        checkpoint_path=checkpoint_path,
+        checkpoint_meta=checkpoint_meta,
+        pos_weight=pos_weight,
     )

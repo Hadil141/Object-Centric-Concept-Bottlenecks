@@ -181,6 +181,10 @@ def add_training_args(parser: argparse.ArgumentParser):
         "--log_dir", type=str, default="logs", help="Path to the log directory"
     )
     parser.add_argument(
+        "--checkpoint_dir", type=str, default="checkpoints",
+        help="Path to save/load model checkpoints"
+    )
+    parser.add_argument(
         "--num_epochs", type=int, default=10, help="Number of epochs for training"
     )
     parser.add_argument(
