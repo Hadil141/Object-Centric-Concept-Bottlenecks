@@ -156,8 +156,8 @@ def add_object_centric_args(parser: argparse.ArgumentParser):
         "--aggregation",
         type=str,
         default="sum",
-        help="Aggregation method for object encodings (sum, max, concat, sum_count, count)",
-        choices=["sum", "max", "concat", "sum_count", "count"],
+        help="Aggregation method for object encodings (sum, max, concat, sum_count, count, binary_count)",
+        choices=["sum", "max", "concat", "sum_count", "count", "binary_count"],
     )
     parser.add_argument(
         "--object_detection_model",

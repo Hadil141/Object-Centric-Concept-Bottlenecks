@@ -343,6 +343,15 @@ def obj_enc_aggregation(aggregation, obj_encodings, img_encodings, only_objects=
             return (
                 torch.count_nonzero(obj_encodings, dim=1) + (img_encodings != 0).long()
             ).float()
+    elif aggregation == "binary_count":
+        # binarized count: 1 if the concept is active in at least one source
+        if only_objects:
+            return (torch.count_nonzero(obj_encodings, dim=1) > 0).float()
+        else:
+            return (
+                torch.count_nonzero(obj_encodings, dim=1) + (img_encodings != 0).long()
+                > 0
+            ).float()
     else:
         raise ValueError(f"Unsupported aggregation method: {aggregation}")
 
