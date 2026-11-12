@@ -483,11 +483,13 @@ if __name__ == "__main__":
 
     seed_all(args.seed)
 
+    vocab_tag = "" if args.vocabulary == "laion" else f"_{args.vocabulary}"
+
     base_embeddings_path = os.path.join(
         args.encoding_dir,
         args.dataset,
         args.model,
-        f"splice_embeddings_{args.l1_penalty}.h5",
+        f"splice_embeddings_{args.l1_penalty}{vocab_tag}.h5",
     )
     assert os.path.exists(
         base_embeddings_path
@@ -506,7 +508,7 @@ if __name__ == "__main__":
             args.dataset,
             args.object_encoding_dir,
             args.model,
-            f"obj_{args.num_objects}_{obj_selection_mode}_min_{args.min_object_size}_max_{args.max_object_size}_score_{args.min_score}_iou_{args.max_iou_threshold}_model_{args.object_detection_model}_{args.l1_penalty}.h5",
+            f"obj_{args.num_objects}_{obj_selection_mode}_min_{args.min_object_size}_max_{args.max_object_size}_score_{args.min_score}_iou_{args.max_iou_threshold}_model_{args.object_detection_model}_{args.l1_penalty}{vocab_tag}.h5",
         )
         assert os.path.exists(
             file_path
@@ -596,7 +598,7 @@ if __name__ == "__main__":
     # Build a checkpoint path 
     checkpoint_dir = os.path.join(args.checkpoint_dir, args.dataset)
     os.makedirs(checkpoint_dir, exist_ok=True)
-    checkpoint_name = f"{args.aggregation}_{args.prediction_level}_{args.task_type}_seed{args.seed}"
+    checkpoint_name = f"{args.aggregation}_{args.prediction_level}_{args.task_type}_seed{args.seed}{vocab_tag}"
     checkpoint_path = os.path.join(checkpoint_dir, f"{checkpoint_name}.pt")
     checkpoint_meta = {
         "num_classes": num_classes,     # Output-Dimension of nn.Linear (=10 for COCOLogic)

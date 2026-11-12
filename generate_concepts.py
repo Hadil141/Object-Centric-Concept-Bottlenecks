@@ -32,9 +32,9 @@ from arg_utils import (
     add_object_centric_args,
     add_dataset_args,
 )
+from coco_category_vocab import load_category_names, build_coco_category_dictionary
 
 from rtpt import RTPT
-
 
 def generate_concepts(
     dataset,
@@ -111,7 +111,7 @@ def generate_concepts(
     # Calculate dataset sizes
     train_size = len(train_dataset)
     test_size = len(test_dataset)
-    embedding_dim = 10000  # SpLiCE embedding dimension
+    embedding_dim = model.dictionary.shape[0]  # SpLiCE embedding dimension (80 for COCO, 10000 for LAION)
 
     supercategory_dim, category_dim = CLASS_NUMBERS[
         dataset
@@ -328,7 +328,7 @@ def generate_obj_encodings(
     # Calculate dataset sizes
     train_size = len(train_dataset)
     test_size = len(test_dataset)
-    embedding_dim = 10000  # SpLiCE embedding dimension
+    embedding_dim = splice_model.dictionary.shape[0]  # SpLiCE embedding dimension (80 for COCO, 10000 for LAION)
 
     # Create HDF5 file and pre-allocate datasets
     with h5py.File(file_path, "w") as f:
@@ -540,14 +540,30 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"Model {args.model} not implemented yet.")
 
+    # load with "laion" as a carrier (gives CLIP backbone + image_mean, vocab-independent)
+    # and override the dictionary afterward
+    
+    load_vocabulary = "laion" if args.vocabulary == "coco_categories" else args.vocabulary
+    load_size = 10000 if args.vocabulary == "coco_categories" else args.size
+
     splicemodel = splice.load(
         model_name,
-        args.vocabulary,
-        args.size,
+        load_vocabulary,
+        load_size,
         l1_penalty=args.l1_penalty,
         device=args.device,
         return_weights=True,
     )
+
+    if args.vocabulary == "coco_categories":
+        instances_json_path = os.path.join(args.data_dir, "annotations", "instances_val2017.json")
+        category_names = load_category_names(instances_json_path)
+        splicemodel.dictionary = build_coco_category_dictionary(
+            splicemodel, model_name, category_names, args.device
+        ).to(args.device)
+
+    vocab_tag = "" if args.vocabulary == "laion" else f"_{args.vocabulary}"
+
     preprocessor = splice.get_preprocess(model_name)
 
     if args.use_object_concepts:
@@ -594,7 +610,7 @@ if __name__ == "__main__":
             args.dataset,
             args.object_encoding_dir,
             args.model,
-            f"obj_{args.num_objects}_{obj_selection_mode}_min_{args.min_object_size}_max_{args.max_object_size}_score_{args.min_score}_iou_{args.max_iou_threshold}_model_{args.object_detection_model}_{args.l1_penalty}.h5",
+            f"obj_{args.num_objects}_{obj_selection_mode}_min_{args.min_object_size}_max_{args.max_object_size}_score_{args.min_score}_iou_{args.max_iou_threshold}_model_{args.object_detection_model}_{args.l1_penalty}{vocab_tag}.h5",
         )
 
         # create file folder if it does not exist
@@ -628,7 +644,7 @@ if __name__ == "__main__":
             args.encoding_dir,
             args.dataset,
             args.model,
-            f"splice_embeddings_{args.l1_penalty}.h5",
+            f"splice_embeddings_{args.l1_penalty}{vocab_tag}.h5",
         )
         # create file folder if it does not exist
         os.makedirs(os.path.dirname(file_path), exist_ok=True)
