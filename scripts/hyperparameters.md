@@ -41,7 +41,7 @@ COCOLogic:
 - SAM: LR 0.0001, Num Epochs 100
 
 VOC:
-- Mask-RCNN: LR 0.0001, Num Epochs 30
+- Mask-RCNN: LR 0.001, Num Epochs 30 
 - SAM: LR 0.0001, Num Epochs 20
 
 SUN:
